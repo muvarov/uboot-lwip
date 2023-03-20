@@ -1,0 +1,3 @@
+[submodule "lib/lwip/lwip-external"]
+	path = lib/lwip/lwip-external
+	url = https://git.savannah.nongnu.org/git/lwip.git
