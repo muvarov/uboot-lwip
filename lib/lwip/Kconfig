@@ -1,0 +1,108 @@
+menu "LWIP"
+config LWIP_LIB
+	bool "Support LWIP library"
+	help
+	  Selecting this option will enable the shared LWIP library code.
+
+menu "LWIP options"
+config LWIP_LIB_DEBUG
+	bool "enable debug"
+	default n
+config LWIP_LIB_NOASSERT
+	bool "disable asserts"
+	default y
+	help
+	    Disabling asserts reduces binary size on 16k.
+config LWIP_LIB_TCP
+        bool "tcp"
+        default y
+config LWIP_LIB_UDP
+        bool "udp"
+        default y
+config LWIP_LIB_DNS
+        bool "dns"
+        default n
+config LWIP_LIB_DHCP
+        bool "dhcp"
+        default y
+
+config LWIP_LIB_LOOPBACK
+        bool "loopback"
+        default n
+        help
+	   Increases size on 1k.
+config LWIP_LIB_SOCKET
+        bool "socket API"
+        default n
+config LWIP_LIB_NETCONN
+        bool "netconn API"
+        default n
+config LWIP_LIB_MEM_SIZE
+	int "mem size"
+	default 1600
+	range 1 4096
+	help
+	    MEM_SIZE: the size of the heap memory. If the application will send
+	    a lot of data that needs to be copied, this should be set high.
+
+config LWIP_LIB_PBUF_LINK_HLEN
+        int "pbuf link hlen"
+        default 14
+        range 4 1024
+        help
+	   PBUF_LINK_HLEN: the number of bytes that should be allocated for a
+           link level header. The default is 14, the standard value for Ethernet.
+endmenu
+
+config CMD_LWIP
+        bool "lwip cmd"
+        default y
+	depends on LWIP_LIB
+        help
+          lwip networking command.
+
+config CMD_LWIP_PING
+        bool "ping"
+        default y
+	depends on CMD_LWIP
+        help
+          lwip ping command.
+
+config CMD_LWIP_REPLACE_PING
+        bool "replace original ping command"
+        default n
+
+config CMD_LWIP_WGET
+        bool "wget"
+        default y
+	depends on CMD_LWIP
+        help
+          lwip wget command.
+
+config CMD_LWIP_REPLACE_WGET
+	bool "replace original wget command"
+	default n
+
+config CMD_LWIP_TFTP
+        bool "tftp"
+        default y
+	depends on CMD_LWIP
+        help
+          lwip tftp command.
+
+config CMD_LWIP_REPLACE_TFTP
+	bool "replace original tftp command"
+	default n
+
+config CMD_LWIP_DHCP
+        bool "dhcp"
+        default y
+	depends on CMD_LWIP
+	depends on LWIP_LIB_DHCP
+        help
+          lwip dhcp command.
+
+config CMD_LWIP_REPLACE_DHCP
+	bool "replace original dhcp command"
+	default n
+endmenu

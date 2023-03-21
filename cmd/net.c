@@ -36,6 +36,10 @@ U_BOOT_CMD(
 #endif
 
 #ifdef CONFIG_CMD_TFTPBOOT
+#if defined(CONFIG_CMD_LWIP_REPLACE_TFTP)
+int do_lwip_tftp(struct cmd_tbl *cmdtp, int flag, int argc,
+		 char *const argv[]);
+#endif
 int do_tftpb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	int ret;
@@ -56,7 +60,12 @@ U_BOOT_CMD(
 );
 #else
 U_BOOT_CMD(
-	tftpboot,	3,	1,	do_tftpb,
+	tftpboot,	3,	1,
+#if defined(CONFIG_CMD_LWIP_REPLACE_TFTP)
+	do_lwip_tftp,
+#else
+	do_tftpb,
+#endif
 	"load file via network using TFTP protocol",
 	"[loadAddress] [[hostIPaddr:]bootfilename]"
 );
@@ -112,7 +121,11 @@ U_BOOT_CMD(
 static int do_dhcp(struct cmd_tbl *cmdtp, int flag, int argc,
 		   char *const argv[])
 {
+#if defined(CONFIG_CMD_LWIP_REPLACE_DHCP)
+	return do_lwip_dhcp();
+#else
 	return netboot_common(DHCP, cmdtp, argc, argv);
+#endif
 }
 
 U_BOOT_CMD(
@@ -137,13 +150,22 @@ U_BOOT_CMD(
 #endif
 
 #if defined(CONFIG_CMD_WGET)
+#if defined(CONFIG_CMD_LWIP_REPLACE_WGET)
+int do_lwip_wget(struct cmd_tbl *cmdtp, int flag, int argc,
+		 char *const argv[])
+#endif
 static int do_wget(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
 	return netboot_common(WGET, cmdtp, argc, argv);
 }
 
 U_BOOT_CMD(
-	wget,   3,      1,      do_wget,
+	wget,   3,      1,
+#if defined(CONFIG_CMD_LWIP_REPLACE_WGET)
+	do_lwip_wget,
+#else
+	do_wget,
+#endif
 	"boot image via network using HTTP protocol",
 	"[loadAddress] [[hostIPaddr:]path and image name]"
 );
@@ -376,6 +398,10 @@ static int netboot_common(enum proto_t proto, struct cmd_tbl *cmdtp, int argc,
 }
 
 #if defined(CONFIG_CMD_PING)
+#if defined(CONFIG_CMD_LWIP_REPLACE_PING)
+extern int do_lwip_ping(struct cmd_tbl *cmdtp, int flag, int argc,
+			char *const argv[]);
+#else
 static int do_ping(struct cmd_tbl *cmdtp, int flag, int argc,
 		   char *const argv[])
 {
@@ -395,9 +421,15 @@ static int do_ping(struct cmd_tbl *cmdtp, int flag, int argc,
 
 	return CMD_RET_SUCCESS;
 }
+#endif
 
 U_BOOT_CMD(
-	ping,	2,	1,	do_ping,
+	ping,	2,	1,
+#if defined(CONFIG_CMD_LWIP_REPLACE_PING)
+	do_lwip_ping,
+#else
+	do_ping,
+#endif
 	"send ICMP ECHO_REQUEST to network host",
 	"pingAddress"
 );

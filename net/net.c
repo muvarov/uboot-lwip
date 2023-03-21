@@ -121,6 +121,7 @@
 #endif
 #include <net/tcp.h>
 #include <net/wget.h>
+#include "../lib/lwip/ulwip.h"
 
 /** BOOTP EXTENTIONS **/
 
@@ -438,7 +439,11 @@ int net_loop(enum proto_t protocol)
 #endif
 
 	bootstage_mark_name(BOOTSTAGE_ID_ETH_START, "eth_start");
+#if defined(CONFIG_LWIP_LIB)
+	if (!ulwip_enabled() || !ulwip_in_loop())
+#endif
 	net_init();
+
 	if (eth_is_on_demand_init()) {
 		eth_halt();
 		eth_set_current();
@@ -619,10 +624,23 @@ restart:
 		 */
 		eth_rx();
 
+#if defined(CONFIG_LWIP_LIB)
+		if (ulwip_enabled()) {
+			net_set_state(NETLOOP_CONTINUE);
+			if (!ulwip_in_loop()) {
+				if (ulwip_app_get_err())
+					net_set_state(NETLOOP_FAIL);
+				else
+					net_set_state(NETLOOP_SUCCESS);
+				goto done;
+			}
+		}
+#endif
 		/*
 		 *	Abort if ctrl-c was pressed.
 		 */
 		if (ctrlc()) {
+			printf("-->enter ctrlc\n");
 			/* cancel any ARP that may not have completed */
 			net_arp_wait_packet_ip.s_addr = 0;
 
@@ -1176,6 +1194,13 @@ void net_process_received_packet(uchar *in_packet, int len)
 	/* too small packet? */
 	if (len < ETHER_HDR_SIZE)
 		return;
+
+#if defined(CONFIG_LWIP_LIB)
+	if (ulwip_enabled()) {
+		uboot_lwip_poll();
+		return;
+	}
+#endif
 
 #if defined(CONFIG_API) || defined(CONFIG_EFI_LOADER)
 	if (push_packet) {

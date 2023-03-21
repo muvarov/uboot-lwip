@@ -1031,3 +1031,5 @@ menu "FWU Multi Bank Updates"
 source lib/fwu_updates/Kconfig
 
 endmenu
+
+source lib/lwip/Kconfig

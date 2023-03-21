@@ -104,3 +104,12 @@ __pycache__
 # pylint files
 /pylint.cur
 /pylint.out/
+
+lib/lwip/lwip-external
+lib/lwip/apps/ping/ping.c
+lib/lwip/apps/http/http_client.c
+lib/lwip/apps/http/http_client.h
+lib/lwip/apps/tftp/tftp.c
+lib/lwip/apps/tftp/tftp_client.h
+lib/lwip/apps/tftp/tftp_common.h
+lib/lwip/apps/tftp/tftp_example.h
