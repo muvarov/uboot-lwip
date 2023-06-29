@@ -1,0 +1,90 @@
+	RFC LWIP IP stack intergation for U-boot
+        ----------------------------------------
+
+Reliable and bug free IP stack is usually an issue when you are trying to write it
+from scratch. It looks like not, but when addinging new features it will be chelledging.
+This RFC work is a demo to enable lwIP (lightweight IP) which is a widely used open-source
+TCP/IP stack designed for embedded systems for U-boot. That will allow using already
+written network applications for microcontrollers.
+
+LwIP  license:
+lwIP is licensed under a BSD-style license: http://lwip.wikia.com/wiki/License.
+
+Main features include:
+- Protocols: IP, IPv6, ICMP, ND, MLD, UDP, TCP, IGMP, ARP, PPPoS, PPPoE
+- DHCP client, DNS client (incl. mDNS hostname resolver), AutoIP/APIPA (Zeroconf), SNMP agent (v1, v2c, v3, private MIB support & MIB compiler)
+- APIs: specialized APIs for enhanced performance, optional Berkeley-alike socket API
+- Extended features: IP forwarding over multiple network interfaces, TCP congestion control, RTT estimation and fast recovery/fast retransmit
+- Addon applications: HTTP(S) server, SNTP client, SMTP(S) client, ping, NetBIOS nameserver, mDNS responder, MQTT client, TFTP server
+
+U-boot implementation details:
+
+1. In general we can build lwIP as .a library and link it against u-boot or compile it in
+the U-boot tree in the same way as other U-boot files. There are few reasons why I selected
+the second variant: iwIP is very customizable with defines for features, memory size, types of
+allocation, some internal types and platform specific code. And it was more easy to enable/disable
+ debug which is also done with defines, and is needed periodically.
+
+2. lwIP has 2 APIs - raw mode and sequential (as lwIP names it, or socket API as we name it in Linux).
+  This RFC implements only raw API as the proof of work.
+
+Raw IP means that the call back function for RX path is registered and will be called when packet
+data passes the IP stack and is ready for the application.
+
+This RFC has an unmodified working ping example from lwip sources which registeres this callback.
+  ping_pcb = raw_new(IP_PROTO_ICMP);
+  raw_recv(ping_pcb, ping_recv, NULL); <- ping_recv is app callback.
+  raw_bind(ping_pcb, IP_ADDR_ANY)
+
+Socket API also gives nice advantages due it will be easy to port linux socket applications to u-boot.
+I.e. lwIP sockets compatible with the linux ones. But that will require RX thread running in the background.
+So that means we need some kind of scheduler, locking and threading support or find some other solution.
+
+3.  Input and output
+
+RX packet path is injected to U-boot eth_rx() polling loop and TX patch is in eth_send() accordingly.
+So we do not touch any drivers code and just eat packets when they are ready.
+
+4. Testing
+
+Unmodified ping example can be used. I did ping from qemu/u-boot tap device on the host:
+
+=> lwip init
+=> lwip ping 192.168.1.2
+ping: recv 3 ms
+tcpdump on the host:
+5:09:10.925951 ARP, Request who-has 192.168.1.200 tell 192.168.1.200, length 28 15:09:12.114643 IP6 fe80::38e2:41ff:fec3:8bda > ip6-allrouters: ICMP6, router solicitation, length 16 15:09:20.370725 ARP, Request who-has 192.168.1.2 tell 192.168.1.200, length 28 15:09:20.370740 ARP, Reply 192.168.1.2 is-at 3a:e2:41:c3:8b:da (oui Unknown), length 28 15:09:20.372789 IP 192.168.1.200 > 192.168.1.2: ICMP echo request, id 44975, seq 1, length 40 15:09:20.372810 IP 192.168.1.2 > 192.168.1.200: ICMP echo reply, id 44975, seq 1, length 40 15:09:25.426636 ARP, Request who-has 192.168.1.200 tell 192.168.1.2, length 28 15:09:25.426870 ARP, Reply 192.168.1.200 is-at f6:11:01:02:03:04 (oui Unknown), length 28
+
+
+5. Wget example
+
+Http server has 192.168.1.2 IP address. (I did not port DNS resolving yet,
+but it's also exist in lwip.) So example just downloads some file with http
+protocol:
+
+Net:   eth0: virtio-net#30
+Hit any key to stop autoboot:  0 
+=> lwip init
+Starting lwIP, local interface IP is 192.168.1.200
+Initialized LWIP stack
+=> lwip wget http://192.168.1.2/
+downloading http://192.168.1.2/ to addr 0x40200000
+downloaded chunk size 294, to addr 0x40200000
+downloaded chunk size 318, to addr 0x40200126
+=> md 0x40200000 0x40
+40200000: 4f44213c 50595443 74682045 0a3e6c6d  <!DOCTYPE html>.
+40200010: 6d74683c 3c0a3e6c 64616568 743c0a3e  <html>.<head>.<t
+40200020: 656c7469 6c65573e 656d6f63 206f7420  itle>Welcome to 
+40200030: 6e69676e 2f3c2178 6c746974 3c0a3e65  nginx!</title>.<
+40200040: 6c797473 200a3e65 62202020 2079646f  style>.    body 
+40200050: 20200a7b 20202020 69772020 3a687464  {.        width:
+40200060: 65353320 200a3b6d 20202020 6d202020   35em;.        m
+40200070: 69677261 30203a6e 74756120 200a3b6f  argin: 0 auto;. 
+40200080: 20202020 66202020 2d746e6f 696d6166         font-fami
+40200090: 203a796c 6f686154 202c616d 64726556  ly: Tahoma, Verd
+402000a0: 2c616e61 69724120 202c6c61 736e6173  ana, Arial, sans
+402000b0: 7265732d 0a3b6669 20202020 2f3c0a7d  -serif;.    }.</
+402000c0: 6c797473 3c0a3e65 6165682f 3c0a3e64  style>.</head>.<
+402000d0: 79646f62 683c0a3e 65573e31 6d6f636c  body>.<h1>Welcom
+402000e0: 6f742065 69676e20 3c21786e 3e31682f  e to nginx!</h1>
+402000f0: 3e703c0a 79206649 7320756f 74206565  .<p>If you see t
