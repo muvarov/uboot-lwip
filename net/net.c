@@ -125,6 +125,7 @@
 #endif
 #include "dhcpv6.h"
 #include "net_rand.h"
+#include <net/ulwip.h>
 
 /** BOOTP EXTENTIONS **/
 
@@ -452,7 +453,9 @@ int net_loop(enum proto_t protocol)
 #endif
 
 	bootstage_mark_name(BOOTSTAGE_ID_ETH_START, "eth_start");
-	net_init();
+	if (!ulwip_enabled() || !ulwip_in_loop())
+		net_init();
+
 	if (eth_is_on_demand_init()) {
 		eth_halt();
 		eth_set_current();
@@ -649,6 +652,16 @@ restart:
 		 */
 		eth_rx();
 
+		if (ulwip_enabled()) {
+			net_set_state(NETLOOP_CONTINUE);
+			if (!ulwip_in_loop()) {
+				if (ulwip_app_get_err())
+					net_set_state(NETLOOP_FAIL);
+				else
+					net_set_state(NETLOOP_SUCCESS);
+				goto done;
+			}
+		}
 		/*
 		 *	Abort if ctrl-c was pressed.
 		 */
@@ -1212,6 +1225,11 @@ void net_process_received_packet(uchar *in_packet, int len)
 	/* too small packet? */
 	if (len < ETHER_HDR_SIZE)
 		return;
+
+	if (ulwip_enabled()) {
+		ulwip_poll();
+		return;
+	}
 
 #if defined(CONFIG_API) || defined(CONFIG_EFI_LOADER)
 	if (push_packet) {
