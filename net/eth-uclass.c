@@ -32,6 +32,7 @@ DECLARE_GLOBAL_DATA_PTR;
 struct eth_device_priv {
 	enum eth_state_t state;
 	bool running;
+	ulwip ulwip;
 };
 
 /**
@@ -345,6 +346,13 @@ int eth_init(void)
 	} while (old_current != current);
 
 	return ret;
+}
+
+struct ulwip *eth_lwip_priv(struct udevice *current)
+{
+	struct eth_device_priv *priv = dev_get_uclass_priv(current);
+
+	return &priv->ulwip;
 }
 
 void eth_halt(void)
