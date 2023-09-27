@@ -558,3 +558,75 @@ out:
 	return ret;
 }
 #endif
+
+/**
+ * wget_validate_uri() - validate the uri for wget
+ *
+ * @uri:	uri string
+ * Return:	true on success, false on failure
+ */
+bool wget_validate_uri(char *uri)
+{
+	char c;
+	bool ret = true;
+	char *str_copy, *s, *authority;
+
+	/* TODO: strict uri conformance check */
+
+	/*
+	 * Uri is expected to be correctly percent encoded.
+	 * This is the minimum check, control codes(0x1-0x19, 0x7F, except '\0')
+	 * and space character(0x20) are not allowed.
+	 */
+	for (c = 0x1; c < 0x21; c++) {
+		if (strchr(uri, c)) {
+			printf("invalid character is used\n");
+			return false;
+		}
+	}
+	if (strchr(uri, 0x7f)) {
+		printf("invalid character is used\n");
+		return false;
+	}
+
+	/*
+	 * This follows the current U-Boot wget implementation.
+	 * scheme: only "http:" is supported
+	 * authority:
+	 *   - user information: not supported
+	 *   - host: supported
+	 *   - port: not supported(always use the default port)
+	 */
+	if (strncmp(uri, "http://", 7)) {
+		printf("only http:// is supported\n");
+		return false;
+	}
+	str_copy = strdup(uri);
+	if (!str_copy)
+		return false;
+
+	s = str_copy + strlen("http://");
+	authority = strsep(&s, "/");
+	if (!s) {
+		printf("invalid uri, no file path\n");
+		ret = false;
+		goto out;
+	}
+	s = strchr(authority, '@');
+	if (s) {
+		printf("user information is not supported\n");
+		ret = false;
+		goto out;
+	}
+	s = strchr(authority, ':');
+	if (s) {
+		printf("user defined port is not supported\n");
+		ret = false;
+		goto out;
+	}
+
+out:
+	free(str_copy);
+
+	return ret;
+}
