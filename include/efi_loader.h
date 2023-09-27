@@ -932,6 +932,7 @@ struct efi_device_path *efi_dp_from_lo(struct efi_load_option *lo,
 struct efi_device_path *efi_dp_concat(const struct efi_device_path *dp1,
 				      const struct efi_device_path *dp2);
 struct efi_device_path *search_gpt_dp_node(struct efi_device_path *device_path);
+struct efi_device_path *efi_search_file_path_dp_node(struct efi_device_path *device_path);
 efi_status_t efi_deserialize_load_option(struct efi_load_option *lo, u8 *data,
 					 efi_uintn_t *size);
 unsigned long efi_serialize_load_option(struct efi_load_option *lo, u8 **data);

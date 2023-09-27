@@ -1219,3 +1219,23 @@ struct efi_device_path *search_gpt_dp_node(struct efi_device_path *device_path)
 
 	return NULL;
 }
+
+/**
+ * efi_search_file_path_dp_node() - search file_path device path node
+ *
+ * @device_path:	device path
+ *
+ * Return:	pointer to the DEVICE_PATH_SUB_TYPE_FILE_PATH device path node
+ */
+struct efi_device_path *efi_search_file_path_dp_node(struct efi_device_path *device_path)
+{
+	struct efi_device_path *dp = device_path;
+
+	while (dp) {
+		if (EFI_DP_TYPE(dp, MEDIA_DEVICE, FILE_PATH))
+			return dp;
+		dp = efi_dp_next(dp);
+	}
+
+	return NULL;
+}

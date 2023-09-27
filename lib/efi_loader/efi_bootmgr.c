@@ -387,7 +387,6 @@ static efi_status_t try_load_entry(u16 n, efi_handle_t *handle,
 	}
 
 	if (lo.attributes & LOAD_OPTION_ACTIVE) {
-		struct efi_device_path *file_path;
 		u32 attributes;
 
 		log_debug("trying to load \"%ls\" from %pD\n", lo.label,
@@ -407,11 +406,17 @@ static efi_status_t try_load_entry(u16 n, efi_handle_t *handle,
 			} else {
 				ret = EFI_LOAD_ERROR;
 			}
-		} else {
-			file_path = expand_media_path(lo.file_path);
-			ret = EFI_CALL(efi_load_image(true, efi_root, file_path,
+		} else if (efi_search_file_path_dp_node(lo.file_path)) {
+			ret = EFI_CALL(efi_load_image(true, efi_root, lo.file_path,
 						      NULL, 0, handle));
-			efi_free_pool(file_path);
+		} else {
+			efi_handle_t h;
+
+			h = efi_dp_find_obj(lo.file_path, &efi_block_io_guid, NULL);
+			if (h)
+				ret = load_default_file_from_blk_dev(h->dev, handle);
+			else
+				ret = EFI_LOAD_ERROR;
 		}
 		if (ret != EFI_SUCCESS) {
 			log_warning("Loading %ls '%ls' failed\n",
@@ -551,13 +556,13 @@ error:
  */
 static efi_status_t efi_bootmgr_enumerate_boot_option(struct eficonfig_media_boot_option *opt,
 						      efi_handle_t *volume_handles,
-						      efi_status_t count)
+						      efi_uintn_t *count)
 {
-	u32 i;
+	u32 i, num = 0;
 	struct efi_handler *handler;
 	efi_status_t ret = EFI_SUCCESS;
 
-	for (i = 0; i < count; i++) {
+	for (i = 0; i < *count; i++) {
 		u16 *p;
 		u16 dev_name[BOOTMENU_DEVICE_NAME_MAX];
 		char *optional_data;
@@ -565,6 +570,16 @@ static efi_status_t efi_bootmgr_enumerate_boot_option(struct eficonfig_media_boo
 		char buf[BOOTMENU_DEVICE_NAME_MAX];
 		struct efi_device_path *device_path;
 		struct efi_device_path *short_dp;
+		struct efi_block_io *blkio;
+
+		ret = efi_search_protocol(volume_handles[i], &efi_block_io_guid, &handler);
+		blkio = handler->protocol_interface;
+		/*
+		 * The logical partition is excluded since the bootmgr tries to
+		 * boot with the default file by scanning the default file on the fly.
+		 */
+		if (blkio->media->logical_partition)
+			continue;
 
 		ret = efi_search_protocol(volume_handles[i], &efi_guid_device_path, &handler);
 		if (ret != EFI_SUCCESS)
@@ -598,16 +613,18 @@ static efi_status_t efi_bootmgr_enumerate_boot_option(struct eficonfig_media_boo
 		 * to store guid, instead of realloc the load_option.
 		 */
 		lo.optional_data = "1234567";
-		opt[i].size = efi_serialize_load_option(&lo, (u8 **)&opt[i].lo);
-		if (!opt[i].size) {
+		opt[num].size = efi_serialize_load_option(&lo, (u8 **)&opt[num].lo);
+		if (!opt[num].size) {
 			ret = EFI_OUT_OF_RESOURCES;
 			goto out;
 		}
 		/* set the guid */
-		optional_data = (char *)opt[i].lo + (opt[i].size - u16_strsize(u"1234567"));
+		optional_data = (char *)opt[num].lo + (opt[num].size - u16_strsize(u"1234567"));
 		memcpy(optional_data, &efi_guid_bootmenu_auto_generated, sizeof(efi_guid_t));
+		num++;
 	}
 
+	*count = num;
 out:
 	return ret;
 }
@@ -837,8 +854,7 @@ efi_status_t efi_bootmgr_delete_boot_option(u16 boot_index)
 /**
  * efi_bootmgr_update_media_device_boot_option() - generate the media device boot option
  *
- * This function enumerates all devices supporting EFI_SIMPLE_FILE_SYSTEM_PROTOCOL
- * and generate the bootmenu entries.
+ * This function enumerates all BlockIo devices and add the boot option for it.
  * This function also provide the BOOT#### variable maintenance for
  * the media device entries.
  * - Automatically create the BOOT#### variable for the newly detected device,
@@ -858,7 +874,7 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 	struct eficonfig_media_boot_option *opt = NULL;
 
 	ret = efi_locate_handle_buffer_int(BY_PROTOCOL,
-					   &efi_simple_file_system_protocol_guid,
+					   &efi_block_io_guid,
 					   NULL, &count,
 					   (efi_handle_t **)&volume_handles);
 	if (ret != EFI_SUCCESS)
@@ -870,8 +886,7 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 		goto out;
 	}
 
-	/* enumerate all devices supporting EFI_SIMPLE_FILE_SYSTEM_PROTOCOL */
-	ret = efi_bootmgr_enumerate_boot_option(opt, volume_handles, count);
+	ret = efi_bootmgr_enumerate_boot_option(opt, volume_handles, &count);
 	if (ret != EFI_SUCCESS)
 		goto out;
 
@@ -889,6 +904,9 @@ efi_status_t efi_bootmgr_update_media_device_boot_option(void)
 	for (i = 0; i < count; i++) {
 		u32 boot_index;
 		u16 var_name[9];
+
+		if (!opt[i].size)
+			continue;
 
 		if (!opt[i].exist) {
 			ret = efi_bootmgr_get_unused_bootoption(var_name, sizeof(var_name),
